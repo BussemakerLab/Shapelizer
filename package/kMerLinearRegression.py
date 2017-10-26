@@ -12,20 +12,33 @@ from string import maketrans
 nucl = ("A","C","G","T")
 
 ##################  VARIOUS FUNCTIONS  #################
-def kMerToVector(kMer, mono, di, all):
+def kMerToVector(kMer, mono, di, all, centralMono):
 	"""Converts a kMer to a line in a design matrix"""
 
 	
-	if mono or all:
+	if mono or all or centralMono:
+
+		
 		#Computes mononucleotide representation
 		monoRep			= dict([ (nucl[i], np.identity(4)[i].tolist()) for i in range(len(nucl))] )
 		x				= []
-		for k in kMer:
-			x			+=  monoRep[k]
+
+		#Determines what indices to use
+		if centralMono:
+			k           = len(kMer)
+			iStart      = (k-1)/2
+			iRange      = range(iStart,k-iStart)
+		else:
+			iRange      = range(len(kMer))
+			
+		#Builds x-vector
+		for i in iRange:
+			x			+=  monoRep[kMer[i]]
 
 		if all:
 			#Takes outer product to get all-by-all representation
 			x= np.tensordot(np.array(x),np.array(x), axes=0).flatten().tolist()
+			
 
 	else:
 		#Computes dinucleotide representation
@@ -50,6 +63,7 @@ def main():
 	paramGroup.add_argument('--mono', help="Use mononucleotides as predictors.", action='store_true')
 	paramGroup.add_argument('--di', help="Use dinucleotides as predictors.", action='store_true')
 	paramGroup.add_argument('--all', help="Use all base-base pairs as predictors.", action='store_true')
+	paramGroup.add_argument('--centralMono', help="Use only central mononucleotides as predictors.", action='store_true')
 	outGroup = parser.add_mutually_exclusive_group(required=True)
 	outGroup.add_argument('--R2', help="Reports R^2", action='store_true')
 	outGroup.add_argument('--crossR2', help="Reports the hold-one-out R^2", action='store_true')
@@ -63,7 +77,11 @@ def main():
 	if not args.crossR2: #(Not used when cross-validated R2 is computed...)
 
 		#Performing initial mononucleotide-only regression
-		xMono				= np.array([ kMerToVector(km, True, False, False) for km in kMers] )
+		if args.centralMono:
+			xMono			= np.array([ kMerToVector(km, False, False, False, True ) for km in kMers] )
+		else:
+			xMono			= np.array([ kMerToVector(km, True,  False, False, False) for km in kMers] )
+
 		#Performs linear regression: beta = Pseudoinverse(X^T*X)*X^T*X
 		betaMono 			= sp.linalg.pinvh(xMono.transpose().dot(xMono)).dot(xMono.transpose().dot(values))
 		#Computes the predicted value yHat = X^T*beta
@@ -71,7 +89,7 @@ def main():
 
 		#Performs secondary regression using interactions
 		if args.di or args.all:
-			xInt			= np.array([ kMerToVector(km, False, args.di, args.all) for km in kMers] )
+			xInt			= np.array([ kMerToVector(km, False, args.di, args.all, False) for km in kMers] )
 			#Computing the number of parameters 
 			nParam			= len([ np.abs(ev) for ev in np.linalg.eigvals(xInt.transpose().dot(xInt)) if np.abs(ev) > 1e-8 ])
 			#Performs linear regression: beta = Pseudoinverse(X^T*X)*X^T*X
@@ -97,7 +115,7 @@ def main():
 	elif args.crossR2:
 		# COMPUTES AND PRINTS THE HOLD-ONE-OUT CROSS-VALIDATED R2
 		#########################################################
-		xAll				=  np.array([ kMerToVector(km, args.mono, args.di, args.all) for km in kMers] )
+		xAll				=  np.array([ kMerToVector(km, args.mono, args.di, args.all, args.centralMono) for km in kMers] )
 
 		#Identifies reverse-complement pairs of sequences that shouldbe held out 
 		kmerPairs			= {}
