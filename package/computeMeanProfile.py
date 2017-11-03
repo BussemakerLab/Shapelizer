@@ -15,37 +15,15 @@ nucl = ("A","C","G","T")
 def main():
 
 	#Creating parser
-	parser = argparse.ArgumentParser(description='Uses the kmer table to score sequence and computes the mean value. One value per line.')
+	parser = argparse.ArgumentParser(description='Reads a list of sequences and computes the mean shape profile using a k-mer table. Outputs one position in the profile per line. The k-mer table can have multiple columns, leading to multiple columns of output.')
 	parser.add_argument('seqFile', metavar='seq.lst', help='Text file containing one sequence per line ("-" gives STDIN)')
-	parser.add_argument('kmerFile', metavar='kmerValue.csv', help='kMer file. (COL 1) = kmer, (COL 2) = values')
+	parser.add_argument('kmerFile', metavar='kmerValue.csv', help='Comma-separated kMer file. The first column contains k-mers, the following columns contain the associated value(s).')
 	parser.add_argument("--scoreN", help="Treats N as the average of A, C, G, and T.", action="store_true")
-	parser.add_argument("--header", help="First line in kmer file is header.", action="store_true")
-	parser.add_argument("--verbose", help="Increase output verbosity", action="store_true")
+	parser.add_argument("--header", help="First line in k-mer file is header.", action="store_true")
+#	parser.add_argument("--verbose", help="Increase output verbosity", action="store_true")
 	args = parser.parse_args()
 
 	#Parses kmer file
-	kMerTable			= {}
-	header				= None
-	k					= None
-	nCol				= None
-	with open(args.kmerFile) as f:
-		if args.header:
-			header		= f.readline().rstrip().split(',')[1:]
-			
-		for l in f:
-			d			= l.rstrip().split(",")
-
-			if k is None:
-				k		= len(d[0])
-				nCol	= len(d)-1
-			elif k != len(d[0]):
-				sf.err('All kmers must be of equal length')
-
-			try:
-				kMerTable[d[0]] = np.array([ float(di) for di in d[1:] ])
-			except ValueError:
-				sl.err("Table entries must be float numbers. LINE='%s'."%(l.rstrip()))
-
 	(kMers, values, k, nCol, header) = sl.readKMerTable(args.kmerFile, args.header)
 	kMerTable 			= dict([(kMers[i], values[i]) for i in range(len(kMers))])
 

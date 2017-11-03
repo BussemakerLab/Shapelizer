@@ -22,3 +22,5 @@ The files in the repository are:
 * `input/bindingModels`                  - TF binding models used in Figure 2 and 5
 * `input/highAffinitySequences`          - High-affinity sequences used for Supplemental figure 1
 * `input/shapeTables`                    - Shape tables
+
+The shape tables were downloaded from `http://rohslab.cmb.usc.edu/DNAshape/`

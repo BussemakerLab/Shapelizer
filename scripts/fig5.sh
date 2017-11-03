@@ -5,7 +5,6 @@ codeDir="$baseDir/package"
 outDir="$baseDir/output/fig5"
 tempDir="$baseDir/temp/fig5"
 modelDir="$baseDir/input/bindingModels"
-tableDir="$baseDir/input/shapeTables"
 pList="exdScr exdUbxIVa Max"
 fList="MGW.5mer ProT.5mer Roll.4mer HelT.4mer"
 nSample=10
@@ -15,8 +14,18 @@ mkdir -p $outDir $tempDir
 
 echo ">  Performs shape projection for all TF-shape combinations:"
 for f in $fList; do
+
+	#Creates input fhape files
+	if [ "$(echo "$f" | cut -d '.' -f2)" = "5mer" ]; then
+		cp $baseDir/input/shapeTables/$f.csv $tempDir/
+	else
+		fIn="$(echo $f | sed 's/4mer/5mer/g')"
+		cat $baseDir/input/shapeTables/$fIn.csv | awk -F ',' '{s[substr($1,1,4)]+=$2;s[substr($1,2,4)]+=$4}  END {for(i in s)print i","s[i]/8}'| sort > $tempDir/$f.csv
+	fi
+	shapeFile="$tempDir/$f.csv"
+
 	echo ">> Creates mono+di shape model file for $f" 
-	$codeDir/kMerLinearRegression.py $tableDir/$f.csv --di   --betas > $tempDir/$f.di.betas.tsv
+	$codeDir/kMerLinearRegression.py $shapeFile --di   --betas > $tempDir/$f.di.betas.tsv
 
 	for p in $pList; do
 		echo ">> Running $f projection for $p"
@@ -46,7 +55,7 @@ seq $nSample | while read s; do
 		mkdir -p $randomShapeDir
 
 		echo ">>>Generating random table: $f, $s."
-		$codeDir/randomKmerTable.py $tableDir/$f.csv -s $s | tee $randomShapeDir/$f.s$s.csv | $codeDir/kMerLinearRegression.py - --di --betas | grep -v "^intercept" > $randomShapeDir/$f.s$s.di.betas.tsv 
+		$codeDir/randomKmerTable.py $shapeFile -s $s --symmetric | tee $randomShapeDir/$f.s$s.csv | $codeDir/kMerLinearRegression.py - --di --betas | grep -v "^intercept" > $randomShapeDir/$f.s$s.di.betas.tsv 
 
 		echo ">>>Running shape projection: $f, $s."
 		for p in $pList; do

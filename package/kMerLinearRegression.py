@@ -12,18 +12,20 @@ from string import maketrans
 nucl = ("A","C","G","T")
 
 ##################  VARIOUS FUNCTIONS  #################
-def kMerToVector(kMer, mono, di, all, centralMono):
-	"""Converts a kMer to a line in a design matrix"""
 
+def kMerToVector(kMer, mono, di, all, centralMono):
+	"""Converts a kMer to a line in a design matrix. mono, di, all, and centralMono are boolean variables indicating what predictors to use"""
 	
+	# mono        = Mononucleotide
+	# di          = Dinucleotide
+	# all         = All-by-all interactions
+	# centralMono = Mononucleotide at central basepair(s).
 	if mono or all or centralMono:
 
-		
-		#Computes mononucleotide representation
+		#Creates a dictioinary that represents A, C, G, and T ad (1,0,0,0), (0,1,0,0), (0,0,1,0), and (0,0,0,1). 
 		monoRep			= dict([ (nucl[i], np.identity(4)[i].tolist()) for i in range(len(nucl))] )
-		x				= []
 
-		#Determines what indices to use
+		#Determines what bases in the kMer to use.
 		if centralMono:
 			k           = len(kMer)
 			iStart      = (k-1)/2
@@ -31,7 +33,8 @@ def kMerToVector(kMer, mono, di, all, centralMono):
 		else:
 			iRange      = range(len(kMer))
 			
-		#Builds x-vector
+		#Builds x-vector (binary indicator vector, line in design matrix)
+		x				= []
 		for i in iRange:
 			x			+=  monoRep[kMer[i]]
 
@@ -55,25 +58,26 @@ def kMerToVector(kMer, mono, di, all, centralMono):
 def main():
 
 	#Creating parser
-	parser = argparse.ArgumentParser(description='Uses linear regression to analyze a pentamer table.')
-	parser.add_argument('kmerFile', metavar='kmerValue.csv', help='kMer file. (COL 1) = kmer, (COL 2) = values')
-	parser.add_argument("--header", help="First line in kmer file is header.", action="store_true")
-	parser.add_argument("--verbose", help="Increase output verbosity", action="store_true")
+	parser = argparse.ArgumentParser(description='Uses linear regression to analyze a k-mer table.')
+	parser.add_argument('kmerFile', metavar='kmerValue.csv', help='Comma-separated k-mer table file. The first column is the k-mer and the following are values.')
+	parser.add_argument("--header",          help="First line in kmer file is header.", action="store_true")
 	paramGroup = parser.add_mutually_exclusive_group(required=True)
-	paramGroup.add_argument('--mono', help="Use mononucleotides as predictors.", action='store_true')
-	paramGroup.add_argument('--di', help="Use dinucleotides as predictors.", action='store_true')
-	paramGroup.add_argument('--all', help="Use all base-base pairs as predictors.", action='store_true')
+	paramGroup.add_argument('--mono',        help="Use mononucleotides as predictors.", action='store_true')
+	paramGroup.add_argument('--di',          help="Use dinucleotides as predictors.", action='store_true')
+	paramGroup.add_argument('--all',         help="Use all base-base pairs as predictors.", action='store_true')
 	paramGroup.add_argument('--centralMono', help="Use only central mononucleotides as predictors.", action='store_true')
 	outGroup = parser.add_mutually_exclusive_group(required=True)
-	outGroup.add_argument('--R2', help="Reports R^2", action='store_true')
-	outGroup.add_argument('--crossR2', help="Reports the hold-one-out R^2", action='store_true')
-	outGroup.add_argument('--betas', help="Reports the regression coefficients beta=(X^T*X)^-1*(X^T*y).", action='store_true')
-	outGroup.add_argument('--yHat', help="Reports the predicted values X^T*beta", action='store_true')
-	outGroup.add_argument('--residual', help="Reports the residual", action='store_true')
+	outGroup.add_argument('--R2',            help="Reports R^2", action='store_true')
+	outGroup.add_argument('--crossR2',       help="Reports R^2 computing hold-one-out cross validation. Reverse-complement pairs are held out together.", action='store_true')
+	outGroup.add_argument('--betas',         help="Reports the regression coefficients beta=(X^T*X)^-1*(X^T*y).", action='store_true')
+	outGroup.add_argument('--yHat',          help="Reports the predicted values X*beta", action='store_true')
+	outGroup.add_argument('--residual',      help="Reports the residual", action='store_true')
+	parser.add_argument("--verbose",         help="Increase output verbosity", action="store_true")
 	args = parser.parse_args()
 
 	(kMers, values, k, nCol, header) = sl.readKMerTable(args.kmerFile, args.header)
 
+	#Constructs design matrix and performs linear regression. (Not run when --crossR2 is used)
 	if not args.crossR2: #(Not used when cross-validated R2 is computed...)
 
 		#Performing initial mononucleotide-only regression
@@ -84,13 +88,14 @@ def main():
 
 		#Performs linear regression: beta = Pseudoinverse(X^T*X)*X^T*X
 		betaMono 			= sp.linalg.pinvh(xMono.transpose().dot(xMono)).dot(xMono.transpose().dot(values))
-		#Computes the predicted value yHat = X^T*beta
+		#Computes the predicted value yHat = X*beta
 		yHatMono			= xMono.dot(betaMono)
 
 		#Performs secondary regression using interactions
 		if args.di or args.all:
+			#Creates the full design matrix
 			xInt			= np.array([ kMerToVector(km, False, args.di, args.all, False) for km in kMers] )
-			#Computing the number of parameters 
+			#Computes the number of parameters 
 			nParam			= len([ np.abs(ev) for ev in np.linalg.eigvals(xInt.transpose().dot(xInt)) if np.abs(ev) > 1e-8 ])
 			#Performs linear regression: beta = Pseudoinverse(X^T*X)*X^T*X
 			betaInt 		= sp.linalg.pinvh(xInt.transpose().dot(xInt)).dot(xInt.transpose().dot(values-yHatMono))
@@ -126,7 +131,7 @@ def main():
 			if rcKm not in kmerPairs:
 				kmerPairs[kMers[i]]	= (i, kMers.index(rcKm))
 
-		#Loops over kmers pair and holds out one at the time
+		#Loops over kmers pair, holds out one pair each the time, performs linear regression, and predicts the held-out values.
 		inValues			= []
 		outValues			= []
 		for pair in kmerPairs.values():
@@ -136,7 +141,7 @@ def main():
 			inValues		+= values[pair,].tolist()
 			outValues 		+= (xAll[pair,:].dot(sp.linalg.pinvh(xTemp.transpose().dot(xTemp)).dot(xTemp.transpose().dot(valuesTemp)))).tolist()
 
-		#Prints mean r^2:
+		#Computes correlation r^2 between input and predicted values
 		if args.header:
 			print ",".join(header[1:])
 		print ",".join(["%f"%pow(st.pearsonr(np.array(inValues)[:,i], np.array(outValues)[:,i])[0],2) for i in range(nCol) ])
@@ -144,25 +149,37 @@ def main():
 	elif args.betas:
 		#PRINTS REGRESSION COEFFICIENTS
 		###############################
+		# Format:
+		# (intercept)
+		# A	betaA1	betaA2	...	betaAk			// Mononucleotide coefficients
+		# C	betaC1	betaC1	...	betaCk
+		# G	betaG1	betaG2	...	betaGk
+		# T	betaT1	betaT1	...	betaTk
+		# AA:1	betaAA1	betaAA1	...	betaAA(k-1)		// Dinucleotide coefficients (bases separated by 1 bp.
+		# AC:1	...	
+		# ...
+		# AA2:							///Interaction coefficientes for bases separated by 2bp.
+		# ...
 		if len(values[0])>1:
-			sl.err("--betas option only possible when k-mer table has one data column")
+			sl.err("The --betas option is only possible when k-mer table has a single data column")
 		
 		diNucl				= [ n1+n2 for n1 in nucl for n2 in nucl ]
 
-		#Organizes coefficients.
+		#Organizes the coefficeints into a dictionary.
 		model				= {0:{}}
+
 		#Adds data from mononucleotide coefficients
 		for i in range(len(nucl)):
-			model[0][nucl[i]] 		= [ betaMono[4*j+i,0] for j in range(k)]
+			model[0][nucl[i]] 		= [ betaMono[4*j+i,0] for j in range(len(betaMono)/4)]
 
+		#Adds dinucleotide interactions to the dictionary, if appropriate.
 		if args.di:
-			#Adds dinucleotide entries
 			model[1] 				= {}
 			for i in range(len(diNucl)):
 				model[1][diNucl[i]] = [ betaInt[16*j+i,0] for j in range(k-1)]
 
+		#Adds interacton interactions to dictionary, if appropriate.
 		elif args.all:
-			#Adds interacton entries
 			for d in range(1,k):
 				model[d] 			= {}
 				for di in diNucl:
@@ -182,20 +199,21 @@ def main():
 							elif i2<i1:
 								model[i1-i2][nucl[n2]+nucl[n1]][i2] += bi
 
-		#Moves mean value to the intercept
+		#Zero-centeres the mononucleotide coefficients by moving the mean to the intercept
 		m 							= np.mean(values[:,0])
 		model["intercept"] 			= m
 		for n in nucl:
-			for i in range(k):
+			for i in range(len(model[0][n])):
 				#Moves mean to intercept
-				model[0][n][i] 		-= m/k
+				model[0][n][i] 		-= m/len(model[0][n])
 
-		#Prints model
+		#Prints model:
+		#Intercept
 		print "intercept\t%f"%model["intercept"]
-		#Mono
+		#Mononucleotide
 		for n in nucl:
 			print n+"\t"+("\t".join(["%f"%v for v in model[0][n]]))
-		#Di
+		#Interactions (Both 'di' and 'all')
 		for d in range(1,k):
 			if d in model:
 				for di in diNucl:

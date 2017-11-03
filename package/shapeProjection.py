@@ -8,37 +8,41 @@ import argparse
 
 nucl = ("A","C","G","T")
 
-##################  CLASS FOR EVALUATING VALUE AND GRADIENT OF MODEL PROJECTION  #################
+######################################### 
+# CLASS FOR EVALUATING PROJECTED MODEL, #
+# THE LOSS FUNCTION, ITS GRADIENT, AND  # 
+# FOR MINIMIZING THE LOSS FUNCTION      #
+######################################### 
 
 class projectionModel:
 	
-	agnosticMono					= None 	# Agnostic model, free energy, mono-nucleotide part
-	agnosticDi						= None	# Agnostic model, free energy, di-nucleotide part
-	agnosticMonoAffinity			= None	# Scoring matrix exponentiated
-	agnosticDiAffinity				= None	# Scoring matrix exponentiated
+	agnosticMono					= None 	# Mononucleotide part of mechanism-agnostic free-energy model.
+	agnosticDi					= None	# Dinucleotide part of mechanism-agnostic free-energy model.
+	agnosticMonoAffinity			 	= None	# Mononucleotide model (above), exponentiated
+	agnosticDiAffinity				= None	# Dinucleotide model (above), exponentiated
 	diDesignMatrix					= None	# Design matrix for projected model
-	L								= None	# Width of agnostic model
-	k								= None	# Number of 
-	useL1Shape 						= False # Activates L1 penalization of shape-sensitivity coefficients 
-	useL1Mono  						= False	# Activates L1 penalization of mono
+	L						= None	# Width of agnostic model
+	k						= None	# Number of positions with shape readout
+	useL1Shape 					= False # Activates L1 penalization of shape-sensitivity coefficients 
+	useL1Mono  					= False	# Activates L1 penalization of mono
 	lambdaL1Shape 					= 0 	# Lambda term for L1 penalization of shape
-	lambdaL1Mono  					= 0		# Lambda term for L1 penalization of mono
-	lambdaL2Mono					= 0		# Lambda term for L2 penalization of shape
-	lambdaL2Shape					= 0		# Lambda term for L2 penalization of mono
+	lambdaL1Mono  					= 0	# Lambda term for L1 penalization of mono
+	lambdaL2Mono					= 0	# Lambda term for L2 penalization of shape
+	lambdaL2Shape					= 0	# Lambda term for L2 penalization of mono
 	objectiveFunction				= None  # String, etiher 'KLDivergence', or 'affinity'
-	gradMonoList1					= None	# Lists containing shape-constraint gradients, L1, Mono
-	gradMonoList2					= None  # L2, Mono
-	gradShapeList1					= None  # L1, Shape
-	gradShapeList2					= None  # L2, Shape
-	edgeReadout						= None	# Should readout of binding-site edge be included?
-	iShape							= None	# Index of first shape sensitivity coefficient in parameter vector
-	iMono							= None  # Same but mononucleotide
-	iIntercept						= None  # Index of constant term
-	iL1Shape						= None  # Index of the first dual variable for the L1 Shape penalty
-	iL1Mono 						= None  # Index of the first dual variable for the L1 Mononucleotide penalty
-	iEnd    						= None  # Last entry
+	gradMonoList1					= None	# List containing the gradients of the first mono L1-dual constraints.
+	gradMonoList2					= None  # List containing the gradients of the second mono L1-dual constraint.
+	gradShapeList1					= None  # List containing the gradients of the first shape L1-dual constraints.
+	gradShapeList2					= None  # List containing the gradients of the sceond shape L1-dual constraints.
+	edgeReadout					= None	# Should readout of binding-site edge be included?
+	iShape						= None	# Index of first shape sensitivity coefficient in parameter vector
+	iMono						= None  # Same but mononucleotide
+	iIntercept					= None  # Index of intercept term
+	iL1Shape					= None  # Index of the first dual variable for the L1 Shape penalty
+	iL1Mono 					= None  # Index of the first dual variable for the L1 Mononucleotide penalty
+	iEnd    					= None  # Last entry
 
-	xMono = np.array([						# Array used to build projected mono matrix
+	xMono = np.array([					# Array used to build projected mono matrix
 		[ 3.,-1.,-1.,-1.],
 		[-1., 3.,-1.,-1.],
 		[-1.,-1., 3.,-1.]])/3.
@@ -51,22 +55,22 @@ class projectionModel:
 		if sorted(agnosticModel.keys()) != [0, 1]:	
 			sl.err("Mechanism-agnostic model file must (only) have mono- and di-nucleotide values.")
 		self.agnosticMono			= np.copy(agnosticModel[0])		#L*4 array
-		self.agnosticMonoAffinity	= np.exp(self.agnosticMono)
+		self.agnosticMonoAffinity		= np.exp(self.agnosticMono)
 		if len(agnosticModel[1].shape) == 3:
 			self.agnosticDi			= np.copy(agnosticModel[1])
 		else:
 			self.agnosticDi			= np.array([ [ [ vi[4*n1+n2] for n2 in range(4) ] for n1 in range(4)] for vi in agnosticModel[1]])	#(L-1)*4*4 array
 		
-		self.agnosticDiAffinity		= np.exp(self.agnosticDi)
-		self.L						= len(self.agnosticMono)
+		self.agnosticDiAffinity			= np.exp(self.agnosticDi)
+		self.L					= len(self.agnosticMono)
 		self.edgeReadout			= edgeReadout
 
 
-		#Sets the mean affinity to 1.0
+		#Sets shifts the agnostic model so that the expected affinity is 1.0
 		if normalizeModel:
-			meanAffinity            =  self.computeSum(1, self.agnosticMonoAffinity, self.agnosticDiAffinity) / 4**self.L
-			self.agnosticMono      -= np.log(meanAffinity) / self.L
-			self.agnosticMonoAffinity = np.exp(self.agnosticMono)
+			meanAffinity    	        =  self.computeSum(1, self.agnosticMonoAffinity, self.agnosticDiAffinity) / 4**self.L
+			self.agnosticMono		-= np.log(meanAffinity) / self.L
+			self.agnosticMonoAffinity 	= np.exp(self.agnosticMono)
 
 		#Processes shape model
 		if sorted(shapeModel.keys()) != [0, 1]:	
@@ -74,11 +78,12 @@ class projectionModel:
 		if len(shapeModel[0]) < 2:
 			sl.err("Shape model must 2bp long or wider.")
 		self.diDesignMatrix			= self.buildDiShapeDesignMatrix(shapeModel, self.L)
-		self.k						= len(self.diDesignMatrix)
+		self.k					= len(self.diDesignMatrix)
 
-		self.objectiveFunction      = objectiveFunction
+		# Saves the objective function choice to be used
+		self.objectiveFunction			= objectiveFunction
 
-		# Setting up variables for L1 Penalization 
+		# Setting up dual variables for L1 Penalization 
 		if lambdaL1Mono == 0.:
 			self.useL1Mono			= False
 			self.lambaL1Mono		= None
@@ -96,24 +101,25 @@ class projectionModel:
 		self.lambdaL2Mono 			= lambdaL2Mono
 		self.lambdaL2Shape			= lambdaL2Shape
 
-		#Setting up indices for accessing state vector
-		self.iShape					= 0
-		self.iMono					= self.iShape + self.k 
-		self.iIntercept				= self.iMono + 3 * self.L
+		#Setting up indices for accessing entries in the state vector
+		self.iShape				= 0
+		self.iMono				= self.iShape     + self.k 
+		self.iIntercept				= self.iMono      + 3 * self.L
 		self.iL1Shape				= self.iIntercept + 1
 		if self.useL1Shape:	
-			self.iL1Mono			= self.iL1Shape + self.k
+			self.iL1Mono			= self.iL1Shape   + self.k
 		else:
 			self.iL1Mono			= self.iL1Shape 
 		if self.useL1Mono:
-			self.iEnd				= self.iL1Mono + 4*self.L
+			self.iEnd			= self.iL1Mono    + 4*self.L
 		else:
-			self.iEnd				= self.iL1Mono
+			self.iEnd			= self.iL1Mono
 	
 		return
 
 	def buildDiShapeDesignMatrix(self, shapeModel, L):
-		""" Builds one dinucleotide scoring matrix (L*(L-1)*4*4) for each shape sensitivity coefficients (L)"""
+		""" Builds one dinucleotide scoring matrix (L*(L-1)*4*4) for each shape sensitivity coefficients."""
+		# Width of sequence-to-shape model
 		k             = len(shapeModel[0])
 
 		#1. Writes the shape model using only dinucletide features
@@ -169,7 +175,7 @@ class projectionModel:
 		return np.dot(partialSum, monoMatrix[-1])
 
 	def computeAffinityError(self, v, sign=1.0):
-		""" Computes the affinity error (Not includig penalties) """
+		""" Computes the L2 affinity error (Not includig penalties) """
 
 		projectedMono         = self.vectorToMonoMatrix(v)
 		projectedDi           = self.vectorToDiMatrix(v)
@@ -183,10 +189,10 @@ class projectionModel:
 
 		intercept22           = np.exp(v[self.iIntercept]*2)  
 		mono22                = projectedMonoAffinity**2      / 4
-		di22				  = projectedDiAffinity**2
+		di22                  = projectedDiAffinity**2
 
 		intercept12           = np.exp(v[self.iIntercept])
-		mono12				  = self.agnosticMonoAffinity * projectedMonoAffinity / 4
+		mono12		      = self.agnosticMonoAffinity * projectedMonoAffinity / 4
 		di12                  = self.agnosticDiAffinity * projectedDiAffinity
 
 		s11                   = self.computeSum(intercept11, mono11, di11)	
@@ -206,10 +212,10 @@ class projectionModel:
 		#Prepares affinity combinations
 		intercept22           = np.exp(v[self.iIntercept]*2)
 		mono22                = projectedMonoAffinity**2 / 4
-		di22				  = projectedDiAffinity**2
+		di22		      = projectedDiAffinity**2
 
 		intercept12           = np.exp(v[self.iIntercept])
-		mono12				  = self.agnosticMonoAffinity * projectedMonoAffinity / 4
+		mono12	              = self.agnosticMonoAffinity * projectedMonoAffinity / 4
 		di12                  = self.agnosticDiAffinity * projectedDiAffinity
 
 		#Computing partial sums
@@ -389,7 +395,7 @@ class projectionModel:
 		if self.lambdaL2Shape != 0:
 			gradient[self.iShape:self.iShape+self.k] +=  2 * self.lambdaL2Shape * np.array(v[self.iShape:self.iShape+self.k])
 
-		#Adding gradinets of L1 variables
+		#Adding gradinets of dual L1 variables
 		if self.useL1Mono:
 			gradient[self.iL1Mono:self.iL1Mono+4*self.L] = np.ones(4*self.L)*self.lambdaL1Mono
 		if self.useL1Shape:
@@ -494,11 +500,7 @@ class projectionModel:
 
 		return outVector
 			
-#	def getZeroSeed(self):
-#		""" Generates seed to start the optimization at the origin"""
-#		return [0. for i in range(self.iEnd)]
 
-	#Naive bounds
 	def getBounds(self, b=10):
 		""" Generates bounds for the optimization """ 
 		out = []
@@ -585,38 +587,53 @@ def main():
 	#DEFAULT values of parameters 
 	nDEFAULT=1000
 	bDEFAULT=10.
-	(l1sDEFAULT, l1mDEFAULT, l2sDEFAULT, l2mDEFAULT)=("0.0", "0.0", "0.0", "0.0")
+	(l1sDEFAULT, l1mDEFAULT, l2sDEFAULT, l2mDEFAULT)=("None", "None", "None", "None")
 	#Creating parser
-	parser = argparse.ArgumentParser(description='Performs shape projection. Uses L2 penalty terms by default.')
-	parser.add_argument('agnosticFile', metavar='bindingModel.tsv', help='File containing mechanism-agnistic  mono- and di-nucleotide binding model.')
-	parser.add_argument('shapeFile', metavar='shapeModel.tsv', help="File containing mono- and di-nucleotide model of shape paramter. Multiple files can be separated by ','")
-	parser.add_argument('-n', metavar='nIt', help='Maximum number of iterations(DEFAULT = %d)'%nDEFAULT, type=int, default=nDEFAULT)
+	parser = argparse.ArgumentParser(description='Performs shape projection given a mechanism-agnostic free-energy model and a sequence-to-shape model, both with mono- and di-nucleotide predictors. The default penalty parameters are lambda_(L1,shape)=lambda_(L1,mono)=0 and lambda_(L2,shape)=lambda_(L2,mono)=1. The penalty terms can also be set using the -L1Shape, -L1Mono, -L2Shape, and -L2Mono options, in which case all non-specified parameters are set to zero.')
+	parser.add_argument('agnosticFile', metavar='bindingModel.tsv', help='File containing mechanism-agnistic mono- and di-nucleotide free-energy model.') 
+	parser.add_argument('shapeFile', metavar='shapeModel.tsv', help="File containing mono- and di-nucleotide sequence-to-shape model.")
+	parser.add_argument('-n', metavar='nIt', help='Maximum number of minimizer iterations (DEFAULT = %d)'%nDEFAULT, type=int, default=nDEFAULT)
 	parser.add_argument('-b', metavar='bound', help='Bound on parameter values (DEFAULT = %f)'%bDEFAULT, type=float, default=bDEFAULT)
 
-	parser.add_argument('-L1Shape', metavar='lambda', help='Lambda parameter for shape readout L1 penalty. (DEFAULT = %s)'%l1sDEFAULT, type=str, default=l1sDEFAULT)
-	parser.add_argument('-L1Mono', metavar='lambda', help='Lambda parameter for mono readout L1 penalty. (DEFAULT = %s)'%l1mDEFAULT,   type=str, default=l1mDEFAULT)
-	parser.add_argument('-L2Shape', metavar='lambda', help='Lambda parameter for shape readout L2 penalty. (DEFAULT = %s)'%l2sDEFAULT, type=str, default=l2sDEFAULT)
-	parser.add_argument('-L2Mono', metavar='lambda', help='Lambda parameter for mono readout L2 penalty. (DEFAULT = %s)'%l2mDEFAULT,   type=str, default=l2mDEFAULT)
+	parser.add_argument('-L1Shape', metavar='l1,l2', help='List of penalty parameters lambda_(L1,shape) to be scanned over. (DEFAULT = %s)'%l1sDEFAULT, type=str, default=l1sDEFAULT)
+	parser.add_argument('-L1Mono',  metavar='l1,l2', help='List of penalty parameters lambda_(L1,mono) to be scanned over. (DEFAULT = %s)'%l1mDEFAULT,   type=str, default=l1mDEFAULT)
+	parser.add_argument('-L2Shape', metavar='l1,l2', help='List of penalty parameters lambda_(L2,shape) to be scanned over. (DEFAULT = %s)'%l2sDEFAULT, type=str, default=l2sDEFAULT)
+	parser.add_argument('-L2Mono',  metavar='l1,l2', help='List of penalty parameters lambda_(L2,mono) to be scanned over. (DEFAULT = %s)'%l2mDEFAULT,   type=str, default=l2mDEFAULT)
 
-	parser.add_argument("--edgeReadout", help="Includes shape-readout of first and last bps of binding site by truncating the sequence model.", action="store_true")
-	parser.add_argument("--affinityError", help="Minimizes the KL Divergence (instead of the KL divergence)", action="store_true")
-	parser.add_argument("--COBYLA", help="Uses the COBYLA minimizer algorithm (SLSQP default)", action="store_true")
+	parser.add_argument("--edgeReadout", help="Includes shape-readout of first and last basepairs of binding site by truncating the sequence model.", action="store_true")
+	parser.add_argument("--affinityError", help="Minimizes the affinity error (instead of the KL divergence)", action="store_true")
+	parser.add_argument("--COBYLA", help="Uses the COBYLA minimizer algorithm (SLSQP is default)", action="store_true")
 	parser.add_argument("--header", help="Prints a header", action="store_true")
-	parser.add_argument("--reportL1", help="Report the dual L1 variables", action="store_true")
+	parser.add_argument("--reportL1", help="Report the dual L1 variables that are used to implement the L1 penalty.", action="store_true")
 	parser.add_argument("--verbose", help="Increase output verbosity", action="store_true")
 	args = parser.parse_args()
 
 	#Building list of penalties to sweep over
-	if args.L1Shape=="0.0" and args.L2Shape=="0.0" and args.L2Shape=="0.0" and args.L2Mono=="0.0":
+	if args.L1Shape=="None" and args.L1Mono=="None" and args.L2Shape=="None" and args.L2Mono=="None":
 		lambdaL1ShapeList = [0.]
 		lambdaL1MonoList  = [0.]
 		lambdaL2ShapeList = [1.]
 		lambdaL2MonoList  = [1.]
 	else:
-		lambdaL1ShapeList = [ float(d) for d in args.L1Shape.split(",")] 
-		lambdaL1MonoList  = [ float(d) for d in args.L1Mono.split(",")] 
-		lambdaL2ShapeList = [ float(d) for d in args.L2Shape.split(",")] 
-		lambdaL2MonoList  = [ float(d) for d in args.L2Mono.split(",")] 
+		if args.L1Shape is "None":
+			lambdaL1ShapeList = [ 0.0 ]
+		else:
+			lambdaL1ShapeList = [ float(d) for d in args.L1Shape.split(",") ] 
+
+		if args.L1Mono  is "None":
+			lambdaL1MonoList  = [ 0.0 ]
+		else:
+			lambdaL1MonoList  = [ float(d) for d in args.L1Mono.split(",")  ] 
+
+		if args.L2Shape is "None":
+			lambdaL2ShapeList = [ 0.0 ]
+		else:
+			lambdaL2ShapeList = [ float(d) for d in args.L2Shape.split(",") ] 
+
+		if args.L2Mono  is "None":
+			lambdaL2MonoList  = [ 0.0 ]
+		else:
+			lambdaL2MonoList  = [ float(d) for d in args.L2Mono.split(",")  ] 
 
 
 	#Building model
@@ -629,8 +646,8 @@ def main():
 		of = 'KLDivergence'
 
 	sl.disp("> Running initial fit to get scale of parameters.", args.verbose)
-	model				= projectionModel(agnosticModel, shapeModel, objectiveFunction=of, edgeReadout=args.edgeReadout)
-	res					= model.fitModel(n=args.n, b=args.b, verbose=args.verbose, useCOBYLA=args.COBYLA)
+	model			= projectionModel(agnosticModel, shapeModel, objectiveFunction=of, edgeReadout=args.edgeReadout)
+	res			= model.fitModel(n=args.n, b=args.b, verbose=args.verbose, useCOBYLA=args.COBYLA)
   
 	#Determines the scaling factor for the L1 and L2 penalties
 	unpenalizedValue	= model.func(res.x) 															#Function value of unpenalized model

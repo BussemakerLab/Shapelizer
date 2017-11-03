@@ -42,7 +42,7 @@ for f in $fList; do
 
 	
 	echo ">> $f, Creating permuted shape table."
-	$codeDir/randomKmerTable.py      $shapeFile --permute -s 0 > $tempDir/$f.permuted.csv
+	$codeDir/randomKmerTable.py      $shapeFile --permute --symmetric -s 0 > $tempDir/$f.permuted.csv
 
 	echo ">> $f, Mono, cross-validated R2, permuted."
 	r2MonoPerm="$r2MonoPerm,$($codeDir/kMerLinearRegression.py $tempDir/$f.permuted.csv --mono --crossR2)"
