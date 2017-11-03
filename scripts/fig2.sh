@@ -22,8 +22,15 @@ for p in $pList; do
 	echo ">> Computes average shape profiles"
 
 	for f in $fList; do
-		#Shape table
-		shapeFile="$baseDir/input/shapeTables/$f.csv"
+
+		#Creates input fhape files
+		shapeFile="$tempDir/$f.csv"
+		if [ "$(echo "$f" | cut -d '.' -f2)" = "5mer" ]; then
+			cp $baseDir/input/shapeTables/$f.csv $shapeFile
+		else
+			fIn="$(echo $f | sed 's/4mer/5mer/g')"
+			cat $baseDir/input/shapeTables/$fIn.csv | awk -F ',' '{s[substr($1,1,4)]+=$2;s[substr($1,2,4)]+=$4}  END {for(i in s)print i","s[i]/8}'| sort > $shapeFile
+		fi
 
 		#Output shape profile files
 		profileFile="$outDir/$p.$f.highAffinity.lst"; >$profileFile
