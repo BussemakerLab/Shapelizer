@@ -615,22 +615,22 @@ def main():
 		lambdaL2ShapeList = [1.]
 		lambdaL2MonoList  = [1.]
 	else:
-		if args.L1Shape is "None":
+		if args.L1Shape == "None":
 			lambdaL1ShapeList = [ 0.0 ]
 		else:
 			lambdaL1ShapeList = [ float(d) for d in args.L1Shape.split(",") ] 
 
-		if args.L1Mono  is "None":
+		if args.L1Mono  == "None":
 			lambdaL1MonoList  = [ 0.0 ]
 		else:
 			lambdaL1MonoList  = [ float(d) for d in args.L1Mono.split(",")  ] 
 
-		if args.L2Shape is "None":
+		if args.L2Shape == "None":
 			lambdaL2ShapeList = [ 0.0 ]
 		else:
 			lambdaL2ShapeList = [ float(d) for d in args.L2Shape.split(",") ] 
 
-		if args.L2Mono  is "None":
+		if args.L2Mono  == "None":
 			lambdaL2MonoList  = [ 0.0 ]
 		else:
 			lambdaL2MonoList  = [ float(d) for d in args.L2Mono.split(",")  ] 
