@@ -5,8 +5,9 @@ codeDir="$baseDir/package"
 outDir="$baseDir/output/fig5"
 tempDir="$baseDir/temp/fig5"
 modelDir="$baseDir/input/bindingModels"
-pList="exdScr exdUbxIVa Max"
+pList="exdScr exdUbxIVa Max CEBPb"
 fList="MGW.5mer ProT.5mer Roll.4mer HelT.4mer"
+
 nSample=10
 
 mkdir -p $outDir $tempDir
@@ -48,6 +49,7 @@ done
 
 
 echo "> Runs shape projection for random tables."
+echo "! This scripts samples nSample=$nSample random tables. Figure 5 is based on 5,000 random tables."
 seq $nSample | while read s; do 
 	echo ">> Starting randomization with seed=${s}."
 	for f in $fList; do
