@@ -41,7 +41,7 @@ for p in exdScr exdUbxIVa; do
 	for LMono in L1Mono L2Mono; do
 		for LShape in L1Shape L2Shape; do
 			echo ">> Running $f projection for $p with -$LMono -$LShape"
-			$codeDir/shapeProjection.py $modelDir/$p.monoDi.tsv $tempDir/$f.di.betas.tsv -$LMono $lambdaList -$LShape $lambdaList --header > $outDir/$p.$f.$LMono.$LShape.projectionBetas.tsv
+			$codeDir/shapeProjection.py $modelDir/$p.monoDi.tsv $tempDir/$f.di.betas.tsv -$LMono $lambdaList -$LShape $lambdaList --header > $outDir/$p.$f.$LMono.$LShape.projectionBetas.csv
 		done
 	done
 done
