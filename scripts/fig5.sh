@@ -38,11 +38,13 @@ echo ">  Performs shape projection with L1 or L2 penalty terms and with differen
 f="MGW.5mer"
 lambdaList="0,0.125,0.25,0.5,1,2,4,8"
 for p in exdScr exdUbxIVa; do 
-	for LMono in L1Mono L2Mono; do
-		for LShape in L1Shape L2Shape; do
-			echo ">> Running $f projection for $p with -$LMono -$LShape"
-			$codeDir/shapeProjection.py $modelDir/$p.monoDi.tsv $tempDir/$f.di.betas.tsv -$LMono $lambdaList -$LShape $lambdaList --header > $outDir/$p.$f.$LMono.$LShape.projectionBetas.csv
-		done
+	for Lstring in L1Mono,L1Shape L2Mono,L2Shape; do
+		LMono="$(echo  "$Lstring" | cut -d "," -f1)"
+		LShape="$(echo "$Lstring" | cut -d "," -f2)"
+		echo ">> Running $f projection for $p with -$LMono -$LShape, KL projection"
+		$codeDir/shapeProjection.py $modelDir/$p.monoDi.tsv $tempDir/$f.di.betas.tsv -$LMono $lambdaList -$LShape $lambdaList                 --header > $outDir/$p.$f.$LMono.$LShape.projectionBetas.kl.csv
+		echo ">> Running $f projection for $p with -$LMono -$LShape, Affinity error"
+		$codeDir/shapeProjection.py $modelDir/$p.monoDi.tsv $tempDir/$f.di.betas.tsv -$LMono $lambdaList -$LShape $lambdaList --affinityError --header > $outDir/$p.$f.$LMono.$LShape.projectionBetas.ae.csv
 	done
 done
 
